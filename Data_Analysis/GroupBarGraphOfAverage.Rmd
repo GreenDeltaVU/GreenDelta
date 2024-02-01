@@ -1,0 +1,117 @@
+---
+title: "GroupBarGraph"
+author: "Cindy"
+date: "2023-10-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#libraries
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(gridExtra)
+```
+
+```{r}
+#open data file
+
+# Specify the path to the XLSX file
+file_path <- "cons_statistic.xlsx"
+
+# Read the XLSX file into a data frame
+data <- read_xlsx(file_path, sheet = "Sheet1")
+
+# Print the data frame
+data  # or just 'data' without print() to display it in the R console
+```
+
+```{r}
+#Break Usage Scenario per Application
+data <- data %>%
+  separate(usage_scenario, into = c("application", "usage_scenario6"), sep = "_", extra = "merge", remove = FALSE) %>%
+  mutate(
+    application = sub("_.*", "", application),
+    usage_scenario6 = sub("_total_power", "", usage_scenario6)
+  )
+
+
+# Print the modified data frame
+print(data)
+```
+
+```{r}
+#Left only application, usage_scenario6, and average_usage
+# Load the dplyr package
+library(dplyr)
+
+# Create a new dataframe with selected columns
+average_data <- data %>% select(application, usage_scenario6, average_usage)
+
+# Create a new dataframe with selected columns, but omitting rocket camera
+#average_data <- data %>%
+#  select(application, usage_scenario6, average_usage) %>%
+#  filter(!(application == "rocket" & usage_scenario6 %in% c("camera_off", "camera_on")))
+
+# Print the new dataframe
+print(average_data)
+```
+
+```{r}
+# Save the plot as a PNG file
+library(gridExtra)
+
+# Create a tableGrob from the new_data table
+table_grob <- tableGrob(average_data)
+
+# Save the table as a PNG file
+ggsave("average_data.png", table_grob, width = 6, height = 8, units = "in")
+
+# Save the table as a CSV file
+write.csv(average_data, "average_data.csv", row.names = FALSE)
+```
+
+```{r}
+#BAR GRAPH OF ALL USER SCENARIO AND APPLICATION
+# Load the ggplot2 package
+library(ggplot2)
+
+# Create the grouped bar graph
+ggplot(average_data, aes(x = application, y = average_usage, fill = usage_scenario6)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  labs(
+    x = "application",
+    y = "average_usage",
+    fill = "usage_scenario"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "top")
+```
+
+```{r}
+#TABLE FOR ZIP VS IMAGE+PDF
+
+# Filter the data for "zip" and "pdf+image" bars
+# Calculate the sum of "pdf" and "image" values within each application
+data_zip <- average_data[average_data$usage_scenario6 == "zip", c("application", "average_usage")]
+data_pdf_image <- aggregate(average_usage ~ application, data = average_data[average_data$usage_scenario6 %in% c("pdf", "image"), ], FUN = sum)
+data_zip_imagepdf <- merge(data_zip, data_pdf_image, by = "application")
+colnames(data_zip_imagepdf) <- c("application", "zip", "image+pdf")
+
+data_zip_imagepdf
+```
+
+```{r}
+#BAR GRAPH FOR ZIP VS IMAGE+PDF
+
+# Reshape the data to long format
+data_zip_imagepdf <- tidyr::gather(data_zip_imagepdf, key = type, value = value, -application)
+
+# Create the grouped bar plot
+ggplot(data_zip_imagepdf, aes(x = application, y = value, fill = type)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(x = "Application", y = "Average Value") +
+  scale_fill_manual(values = c("zip" = "blue", "image+pdf" = "red")) +
+  theme_minimal()
+```
